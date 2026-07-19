@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Overdrive</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui">
+            <div id="score-board">SCORE: <span id="score">0</span></div>
+            <div id="high-score-board">BEST: <span id="high-score">0</span></div>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="game-over-screen" class="hidden">
+            <h1>GAME OVER</h1>
+            <p>Your Score: <span id="final-score">0</span></p>
+            <button id="restart-btn">LAUNCH AGAIN</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
