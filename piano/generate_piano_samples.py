@@ -29,18 +29,18 @@ def download(url, path):
             dst.write(block)
 
 for midi, name in SAMPLES.items():
-    target = os.path.join(OUT, f"piano_{midi}.pcm")
+    target = os.path.join(OUT, f"piano_{midi}.wav")
     mp3 = os.path.join(tempfile.gettempdir(), f"stable_piano_{midi}.mp3")
     download(BASE + name + ".mp3", mp3)
 
-    # Convert the genuine recording to compact raw PCM for Android's low-latency mixer.
+    # Convert the genuine recording to standard WAV for Android SoundPool's low-latency sample engine.
     # A short fade at the end prevents an audible hard cut while keeping long presses bounded.
     subprocess.run([
         "ffmpeg","-y","-hide_banner","-loglevel","error",
         "-i",mp3,
         "-t",str(MAX_SECONDS),
         "-af","afade=t=out:st=1.85:d=0.35",
-        "-ar",str(RATE),"-ac","1","-f","s16le",target
+        "-ar",str(RATE),"-ac","1","-c:a","pcm_s16le",target
     ], check=True)
 
-print("Downloaded and converted", len(SAMPLES), "real Salamander Yamaha C5 samples.")
+print("Downloaded and converted", len(SAMPLES), "real Salamander Yamaha C5 WAV samples for SoundPool.")
