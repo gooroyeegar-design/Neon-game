@@ -156,20 +156,44 @@ public class MainActivity extends Activity {
             if(old!=null) soundPool.stop(old);
             int stream=soundPool.play(sid,Math.min(1f,vel)*volume,Math.min(1f,vel)*volume,1,0,rate);
             if(stream!=0) streams.put(note,stream);
+            final int streamId=stream;
             Runnable stopper=() -> {
-                Integer st=streams.remove(note);
-                if(st!=null && soundPool!=null) soundPool.stop(st);
+                Integer st=streams.get(note);
+                if(st!=null && st==streamId && soundPool!=null) {
+                    streams.remove(note);
+                    soundPool.stop(streamId);
+                }
             };
             Runnable previous=autoStops.put(note,stopper);
             if(previous!=null) audioHandler.removeCallbacks(previous);
-            audioHandler.postDelayed(stopper,1850);
+            audioHandler.postDelayed(() -> fadeAndStop(note,streamId,170), 1650);
         }
 
         void stopSample(int note) {
             Runnable r=autoStops.remove(note);
             if(r!=null) audioHandler.removeCallbacks(r);
-            Integer st=streams.remove(note);
-            if(st!=null && soundPool!=null) soundPool.stop(st);
+            Integer st=streams.get(note);
+            if(st!=null) fadeAndStop(note,st,135);
+        }
+
+        void fadeAndStop(final int note, final int streamId, final int durationMs) {
+            if(soundPool==null || streamId==0) return;
+            final int steps=9;
+            final long stepMs=Math.max(12,durationMs/steps);
+            for(int i=1;i<=steps;i++) {
+                final int step=i;
+                audioHandler.postDelayed(() -> {
+                    Integer current=streams.get(note);
+                    if(current==null || current!=streamId) return;
+                    float gain=Math.max(0f,1f-(step/(float)steps));
+                    soundPool.setVolume(streamId,volume*gain,volume*gain);
+                    if(step==steps) {
+                        streams.remove(note);
+                        soundPool.stop(streamId);
+                        autoStops.remove(note);
+                    }
+                }, stepMs*i);
+            }
         }
 
         class Voice {
@@ -200,7 +224,7 @@ public class MainActivity extends Activity {
         }
         int visibleCount(){return visibleWhites[Math.max(0,Math.min(visibleWhites.length-1,zoomStep))];}
         float keyWidth(){return getWidth()/(float)visibleCount();}
-        float keyboardTop(){return 82f;}
+        float keyboardTop(){return 128f;}
         float keyboardBottom(){return getHeight()-8f;}
         void clampScroll(){
             float max=MAX_WHITE-MIN_WHITE+1-visibleCount();
@@ -505,7 +529,7 @@ public class MainActivity extends Activity {
 
             if(action==MotionEvent.ACTION_DOWN) {
                 float x=e.getX(), y=e.getY();
-                if(y<82) { toolbarAction(x); return true; }
+                if(y<128) { toolbarAction(x); return true; }
                 panning=false;
                 int n=hit(x,y);
                 if(n>0) {
@@ -524,7 +548,7 @@ public class MainActivity extends Activity {
 
             if(action==MotionEvent.ACTION_POINTER_DOWN) {
                 float x=e.getX(idx), y=e.getY(idx);
-                if(y<92) { toolbarAction(x); return true; }
+                if(y<128) { toolbarAction(x); return true; }
                 int n=hit(x,y);
                 if(n>0) {
                     fingers.put(id,n);
