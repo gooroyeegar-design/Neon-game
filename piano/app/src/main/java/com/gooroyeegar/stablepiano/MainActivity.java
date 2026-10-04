@@ -12,6 +12,7 @@ import android.widget.*;
 import java.io.*;
 import java.util.*;
 import android.content.res.AssetManager;
+import android.content.res.AssetFileDescriptor;
 
 // Final performance/UI build verification
 public class MainActivity extends Activity {
@@ -56,7 +57,11 @@ public class MainActivity extends Activity {
         final ArrayList<Event> take = new ArrayList<>();
 
         final int[] SAMPLE_NOTES = {21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69,72,75,78,81,84,87,90,93,96,99,102,105,108};
-        final HashMap<Integer,Sample> samples = new HashMap<>();
+        final int MIN_NOTE=21, MAX_NOTE=108;
+        final int MIN_WHITE=whiteIndex(MIN_NOTE), MAX_WHITE=whiteIndex(MAX_NOTE);
+        final int[] visibleWhites={15,18,21,24,28,35};
+
+
 
         final String[] instruments = {
             "Grand Piano","Bright Piano","Electric Piano","Honky-Tonk","Rhodes","Harpsichord",
@@ -89,6 +94,18 @@ public class MainActivity extends Activity {
         SoundPool soundPool;
         int loadedSamples = 0;
         boolean soundReady = false;
+
+        PianoView(Context c) {
+            super(c);
+            setFocusable(true);
+            stroke.setStyle(Paint.Style.STROKE);
+            stroke.setStrokeWidth(1f);
+            shadow.setShadowLayer(7f,0,3f,0x66000000);
+            setLayerType(View.LAYER_TYPE_SOFTWARE,null);
+            loadSamples();
+            startAudio();
+            startMidi();
+        }
 
         void loadSamples() {
             try {
