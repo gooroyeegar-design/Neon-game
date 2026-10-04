@@ -313,10 +313,10 @@ public class MainActivity extends Activity {
         }
 
         void toolbarAction(float x) {
-            float left=150, w=46, gap=4;
+            float left=10, w=Math.max(62f,Math.min(82f,(getWidth()-24f)/9f)), gap=3;
             if (x<left) return;
             int i=(int)((x-left)/(w+gap));
-            if (i<0 || i>10) return;
+            if (i<0 || i>8) return;
             switch(i) {
                 case 0: instrument=(instrument+1)%instruments.length; break;
                 case 1: mode=(mode+1)%modes.length; break;
@@ -326,41 +326,37 @@ public class MainActivity extends Activity {
                 case 5: playTake(); break;
                 case 6: zoomStep=Math.max(0,zoomStep-1); clampScroll(); break;
                 case 7: zoomStep=Math.min(visibleWhites.length-1,zoomStep+1); clampScroll(); break;
-                case 8: scroll-=visibleCount()*.65f; clampScroll(); break;
-                case 9: scroll+=visibleCount()*.65f; clampScroll(); break;
-                case 10: settingsDialog(); break;
+                case 8: settingsDialog(); break;
             }
             invalidate();
         }
 
         @Override protected void onDraw(Canvas c) {
             int W=getWidth(), H=getHeight();
-            c.drawColor(Color.rgb(18,19,22));
+            c.drawColor(Color.rgb(238,240,243));
 
             // Real-piano-style control surface: compact, dark, functional, with the keyboard occupying the screen.
             p.setStyle(Paint.Style.FILL);
-            p.setColor(Color.rgb(24,25,29));
+            p.setColor(Color.rgb(250,250,252));
             c.drawRect(0,0,W,keyboardTop(),p);
-            p.setColor(Color.rgb(42,43,48));
+            p.setColor(Color.rgb(210,213,218));
             c.drawRect(0,keyboardTop()-3,W,keyboardTop()+2,p);
 
             p.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
             p.setTextAlign(Paint.Align.LEFT);
             p.setTextSize(18);
-            p.setColor(Color.WHITE);
+            p.setColor(Color.rgb(25,28,33));
             c.drawText("PIANO ∞",14,27,p);
             p.setTypeface(Typeface.DEFAULT);
             p.setTextSize(10);
-            p.setColor(Color.rgb(160,162,168));
+            p.setColor(Color.rgb(88,93,101));
             c.drawText(instruments[instrument],14,47,p);
             c.drawText(modes[mode]+"  •  "+scales[scale]+"  •  "+bpm+" BPM",14,64,p);
 
-            String[] labels={"SOUND","MODE","SCALE","METRO","REC","PLAY","−","＋","◀","▶","SET"};
-            float bw=46, gap=4, x=150;
+            String[] labels={"Sound","Mode","Scale","Metronome","Record","Play","Zoom −","Zoom +","Settings"};
+            float bw=Math.max(62f,Math.min(82f,(W-24f)/9f)), gap=3, x=10;
             for(int i=0;i<labels.length;i++) {
-                if (i==0) drawButton(c,x,10,bw,labels[i],false);
-                else if (i==1) drawButton(c,x,10,bw,labels[i],false);
-                else drawButton(c,x,10,bw,labels[i],
+                drawButton(c,x,10,bw,labels[i],
                     (i==3&&metronome)||(i==4&&recording)||(i==5&&playing));
                 x+=bw+gap;
             }
@@ -379,12 +375,12 @@ public class MainActivity extends Activity {
         int volumePercent(){return Math.round(volume*100f);}
 
         void drawButton(Canvas c,float x,float y,float w,String text,boolean on) {
-            p.setColor(on?Color.rgb(119,82,170):Color.rgb(47,48,54));
+            p.setColor(on?Color.rgb(55,103,184):Color.WHITE);
             c.drawRoundRect(x,y,x+w,y+64,8,8,p);
             p.setTextAlign(Paint.Align.CENTER);
             p.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
             p.setTextSize(text.length()>5?9:11);
-            p.setColor(Color.WHITE);
+            p.setColor(on?Color.WHITE:Color.rgb(31,34,39));
             c.drawText(text,x+w/2,y+38,p);
             p.setTypeface(Typeface.DEFAULT);
         }
