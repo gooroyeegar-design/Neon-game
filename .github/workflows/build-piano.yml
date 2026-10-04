@@ -1,0 +1,48 @@
+name: Build stable Piano APK
+on:
+  push:
+    paths:
+      - 'piano/**'
+      - '.github/workflows/build-piano.yml'
+  pull_request:
+    paths:
+      - 'piano/**'
+      - '.github/workflows/build-piano.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: piano
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install audio converter
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Download and convert real piano samples
+        run: python generate_piano_samples.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK exists
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Inspect APK
+        run: |
+          unzip -t app/build/outputs/apk/debug/app-debug.apk >/dev/null
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep 'assets/piano_' | head
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-piano-apk
+          path: piano/app/build/outputs/apk/debug/app-debug.apk
