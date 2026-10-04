@@ -1,0 +1,19 @@
+Piano ∞ — Sound Credits
+
+Grand Piano sound:
+Salamander Grand Piano V3
+Author: Alexander Holm
+Instrument: Yamaha C5 Grand Piano
+License: Creative Commons Attribution 3.0 (CC BY 3.0)
+
+The recordings are used as the basis for the piano sound in this app and
+have been converted to 48 kHz mono PCM and trimmed with a short fade for
+low-latency Android playback.
+
+Source:
+https://github.com/sfzinstruments/SalamanderGrandPiano
+
+License:
+https://creativecommons.org/licenses/by/3.0/
+
+The app does not claim ownership of the original recordings.
