@@ -22,7 +22,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Generate original piano samples
+      - name: Install audio converter
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Download and convert real piano samples
         run: python generate_piano_samples.py
       - uses: actions/setup-java@v4
         with:
