@@ -214,6 +214,7 @@ public class MainActivity extends Activity {
                 if (old!=null) { old.held=false; old.releaseNs=System.nanoTime(); }
                 voices.put(n,new Voice(n,Math.max(.08f,Math.min(1f,vel))));
             }
+            playSample(n,vel);
             if (recording) take.add(new Event(System.currentTimeMillis()-recStart,1,n,vel));
             invalidate();
         }
@@ -230,7 +231,7 @@ public class MainActivity extends Activity {
         void noteOffRaw(int n) {
             synchronized (voices) {
                 Voice v=voices.get(n);
-                if (v!=null && v.held && !sustain) { v.held=false; v.releaseNs=System.nanoTime(); }
+                if (v!=null && v.held && !sustain) { v.held=false; v.releaseNs=System.nanoTime(); stopSample(n); }
             }
             if (recording) take.add(new Event(System.currentTimeMillis()-recStart,0,n,0));
         }
@@ -238,7 +239,7 @@ public class MainActivity extends Activity {
         void releaseAll() {
             synchronized (voices) {
                 long now=System.nanoTime();
-                for (Voice v:voices.values()) { v.held=false; v.releaseNs=now; }
+                for (Voice v:voices.values()) { v.held=false; v.releaseNs=now; stopSample(v.note); }
             }
             fingers.clear();
         }
@@ -548,8 +549,7 @@ public class MainActivity extends Activity {
         void close() {
             alive=false;
             releaseAll();
-            if(mixer!=null) try{mixer.join(600);}catch(Exception ignored){}
-            if(audio!=null) try{audio.pause();audio.flush();audio.release();}catch(Exception ignored){}
+            if(soundPool!=null) try{soundPool.release();}catch(Exception ignored){}
             if(midiDevice!=null) try{midiDevice.close();}catch(Exception ignored){}
         }
     }
