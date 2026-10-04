@@ -1,55 +1,46 @@
-import math, os, struct
+import os, subprocess, tempfile, urllib.request
 
 OUT = "app/src/main/assets"
 RATE = 48000
-NOTES = [21, 24, 36, 48, 60, 72, 84, 96, 108]
+MAX_SECONDS = 2.20
 
+# Salamander Grand Piano V3: real Yamaha C5 recordings by Alexander Holm.
+# Sampled every minor third, matching the original Tone.js distribution.
+SAMPLES = {
+    21:"A0", 24:"C1", 27:"Ds1", 30:"Fs1",
+    33:"A1", 36:"C2", 39:"Ds2", 42:"Fs2",
+    45:"A2", 48:"C3", 51:"Ds3", 54:"Fs3",
+    57:"A3", 60:"C4", 63:"Ds4", 66:"Fs4",
+    69:"A4", 72:"C5", 75:"Ds5", 78:"Fs5",
+    81:"A5", 84:"C6", 87:"Ds6", 90:"Fs6",
+    93:"A6", 96:"C7", 99:"Ds7", 102:"Fs7",
+    105:"A7", 108:"C8",
+}
+BASE = "https://tonejs.github.io/audio/salamander/"
 os.makedirs(OUT, exist_ok=True)
 
-def make_sample(midi):
-    f0 = 440.0 * (2.0 ** ((midi - 69) / 12.0))
-    dur = 3.4 if midi <= 36 else (2.7 if midi <= 72 else 2.1)
-    n = int(RATE * dur)
-    partials = [
-        (1.0, 1.00, 0.00),
-        (2.01, 0.55, 0.001),
-        (3.02, 0.32, 0.002),
-        (4.04, 0.19, 0.003),
-        (5.08, 0.11, 0.004),
-        (6.13, 0.065, 0.006),
-        (7.20, 0.038, 0.008),
-        (8.30, 0.022, 0.010),
-        (9.45, 0.012, 0.012),
-    ]
-    out = bytearray(n * 2)
-    peak = 0.0
-    vals = [0.0] * n
-    for i in range(n):
-        t = i / RATE
-        # Fast hammer attack, then the characteristic long piano decay.
-        attack = 1.0 - math.exp(-t * 140.0)
-        decay = math.exp(-t * (0.72 if midi < 48 else 1.15 if midi < 72 else 1.65))
-        z = 0.0
-        for ratio, amp, detune in partials:
-            f = f0 * ratio
-            if f >= RATE * 0.47:
-                continue
-            z += amp * math.sin(2.0 * math.pi * f * t + detune)
-        # Two very quiet detuned strings add body without turning into a buzzy synth.
-        if f0 < 1200:
-            z += 0.09 * math.sin(2.0 * math.pi * f0 * 1.0022 * t)
-            z += 0.055 * math.sin(2.0 * math.pi * f0 * 0.9977 * t)
-        hammer = math.exp(-t * 32.0) * math.sin(2.0 * math.pi * (f0 * 3.7) * t) * 0.018
-        v = (z * attack * decay * 0.42) + hammer
-        vals[i] = v
-        peak = max(peak, abs(v))
-    scale = 0.82 / max(peak, 0.001)
-    for i, v in enumerate(vals):
-        q = max(-32767, min(32767, int(v * scale * 32767.0)))
-        struct.pack_into("<h", out, i * 2, q)
-    with open(os.path.join(OUT, f"piano_{midi}.pcm"), "wb") as f:
-        f.write(out)
+def download(url, path):
+    req = urllib.request.Request(url, headers={"User-Agent":"StablePiano/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as src, open(path, "wb") as dst:
+        while True:
+            block = src.read(1024 * 256)
+            if not block:
+                break
+            dst.write(block)
 
-for midi in NOTES:
-    make_sample(midi)
-print("Generated", len(NOTES), "original piano samples at", RATE, "Hz")
+for midi, name in SAMPLES.items():
+    target = os.path.join(OUT, f"piano_{midi}.pcm")
+    mp3 = os.path.join(tempfile.gettempdir(), f"stable_piano_{midi}.mp3")
+    download(BASE + name + ".mp3", mp3)
+
+    # Convert the genuine recording to compact raw PCM for Android's low-latency mixer.
+    # A short fade at the end prevents an audible hard cut while keeping long presses bounded.
+    subprocess.run([
+        "ffmpeg","-y","-hide_banner","-loglevel","error",
+        "-i",mp3,
+        "-t",str(MAX_SECONDS),
+        "-af","afade=t=out:st=1.85:d=0.35",
+        "-ar",str(RATE),"-ac","1","-f","s16le",target
+    ], check=True)
+
+print("Downloaded and converted", len(SAMPLES), "real Salamander Yamaha C5 samples.")
