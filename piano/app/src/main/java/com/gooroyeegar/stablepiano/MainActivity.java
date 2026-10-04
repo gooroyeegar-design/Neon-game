@@ -5,6 +5,7 @@ import android.os.*;
 import android.content.*;
 import android.graphics.*;
 import android.media.*;
+import android.os.Handler;
 import android.media.midi.*;
 import android.view.*;
 import android.widget.*;
@@ -79,207 +80,74 @@ public class MainActivity extends Activity {
         float panStartX, panStartScroll;
         boolean panning = false;
 
-        AudioTrack audio;
-        Thread mixer;
-        volatile boolean alive = true;
-        MidiManager midiManager;
-        MidiDevice midiDevice;
-        MidiReceiver midiReceiver;
-
-        final int RATE = 48000;
-        final int MIN_NOTE = 21;
-        final int MAX_NOTE = 108;
-        final int MIN_WHITE = whiteIndex(MIN_NOTE);
-        final int MAX_WHITE = whiteIndex(MAX_NOTE);
-        final int[] visibleWhites = {15,18,21,24,28,35};
-
-        class Sample {
-            int midi;
-            float[] data;
-            Sample(int m, float[] d) { midi=m; data=d; }
-        }
-
-        class Voice {
-            int note;
-            float amp;
-            double pos;
-            final long bornNs;
-            boolean held = true;
-            long releaseNs = 0;
-            Voice(int n, float a) { note=n; amp=a; bornNs=System.nanoTime(); }
-        }
-
-        class Event {
-            long t;
-            int type, note;
-            float vel;
-            Event(long tt, int ty, int n, float v) { t=tt; type=ty; note=n; vel=v; }
-        }
-
-        PianoView(Context c) {
-            super(c);
-            setFocusable(true);
-            stroke.setStyle(Paint.Style.STROKE);
-            stroke.setStrokeWidth(1f);
-            shadow.setShadowLayer(7f, 0, 3f, 0x66000000);
-            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-            loadSamples();
-            startAudio();
-            startMidi();
-        }
-
-        int whiteIndex(int midi) {
-            int[] pcs = {0,2,4,5,7,9,11};
-            int octave = midi / 12;
-            int pc = midi % 12;
-            for (int i=0;i<7;i++) if (pcs[i] == pc) return octave*7+i;
-            return -1;
-        }
-
-        int noteAtWhite(int wi) {
-            int[] pcs = {0,2,4,5,7,9,11};
-            int octave = wi / 7;
-            return octave*12 + pcs[wi % 7];
-        }
-
-        int visibleCount() {
-            return visibleWhites[Math.max(0,Math.min(visibleWhites.length-1,zoomStep))];
-        }
-
-        float keyWidth() {
-            return getWidth() / (float)visibleCount();
-        }
-
-        float keyboardTop() { return 92f; }
-        float keyboardBottom() { return getHeight() - 10f; }
-
-        void clampScroll() {
-            float max = MAX_WHITE - MIN_WHITE + 1 - visibleCount();
-            if (max < 0) max = 0;
-            scroll = Math.max(MIN_WHITE, Math.min(MIN_WHITE + max, scroll));
-        }
+        final int[] soundIds = new int[109];
+        final int[] sampleForNote = new int[109];
+        final HashMap<Integer,Integer> streams = new HashMap<>();
+        final HashMap<Integer,Runnable> autoStops = new HashMap<>();
+        final Handler audioHandler = new Handler(Looper.getMainLooper());
+        SoundPool soundPool;
+        int loadedSamples = 0;
+        boolean soundReady = false;
 
         void loadSamples() {
-            AssetManager am = getAssets();
-            for (int midi : SAMPLE_NOTES) {
-                try {
-                    InputStream in = am.open("piano_" + midi + ".pcm");
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n=in.read(buf))>0) out.write(buf,0,n);
-                    in.close();
-                    byte[] raw = out.toByteArray();
-                    float[] pcm = new float[raw.length/2];
-                    for (int i=0;i<pcm.length;i++) {
-                        int lo = raw[i*2] & 255;
-                        int hi = raw[i*2+1];
-                        short q = (short)(lo | (hi << 8));
-                        pcm[i] = q / 32768f;
-                    }
-                    samples.put(midi, new Sample(midi, pcm));
-                } catch (Exception ignored) {}
-            }
-        }
-
-        Sample sampleFor(int note) {
-            Sample best = null;
-            int bestDist = Integer.MAX_VALUE;
-            for (Sample s : samples.values()) {
-                int d = Math.abs(note - s.midi);
-                if (d < bestDist) { best=s; bestDist=d; }
-            }
-            return best;
-        }
-
-        void startAudio() {
-            int min = AudioTrack.getMinBufferSize(
-                RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
-            );
-            if (min <= 0) min = RATE / 10;
-            AudioFormat format = new AudioFormat.Builder()
-                .setSampleRate(RATE)
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                .build();
-            int size = Math.max(min * 2, 4096);
-            AudioTrack.Builder b = new AudioTrack.Builder()
-                .setAudioAttributes(new AudioAttributes.Builder()
+            try {
+                AudioAttributes attrs = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build())
-                .setAudioFormat(format)
-                .setBufferSizeInBytes(size)
-                .setTransferMode(AudioTrack.MODE_STREAM);
-            if (Build.VERSION.SDK_INT >= 26) b.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY);
-            audio = b.build();
-            audio.setVolume(1f);
-            audio.play();
-            mixer = new Thread(() -> mix(), "PianoLowLatency");
-            mixer.start();
+                    .build();
+                soundPool = new SoundPool.Builder()
+                    .setAudioAttributes(attrs)
+                    .setMaxStreams(32)
+                    .build();
+                soundPool.setOnLoadCompleteListener((pool,id,status) -> {
+                    if(status==0) {
+                        loadedSamples++;
+                        if(loadedSamples>=SAMPLE_NOTES.length) { soundReady=true; postInvalidate(); }
+                    }
+                });
+                AssetManager am=getAssets();
+                for(int midi:SAMPLE_NOTES) {
+                    AssetFileDescriptor afd=am.openFd("piano_"+midi+".wav");
+                    soundIds[midi]=soundPool.load(afd,1);
+                    afd.close();
+                }
+                for(int n=MIN_NOTE;n<=MAX_NOTE;n++) {
+                    int best=SAMPLE_NOTES[0], dist=999;
+                    for(int m:SAMPLE_NOTES) {
+                        int d=Math.abs(n-m);
+                        if(d<dist){dist=d;best=m;}
+                    }
+                    sampleForNote[n]=best;
+                }
+            } catch(Exception e) { soundReady=false; }
         }
 
-        void mix() {
-            final int frames = 192;
-            short[] out = new short[frames * 2];
-            while (alive) {
-                Arrays.fill(out, (short)0);
-                long now = System.nanoTime();
-                synchronized (voices) {
-                    Iterator<Voice> it = voices.values().iterator();
-                    while (it.hasNext()) {
-                        Voice v = it.next();
-                        Sample s = sampleFor(v.note);
-                        if (s == null || s.data.length < 2) { it.remove(); continue; }
-                        double ratio = Math.pow(2.0, (v.note - s.midi) / 12.0);
-                        boolean remove = false;
-                        // Hard damper: a long touch cannot ring forever.
-                        if (v.held && now - v.bornNs >= 1850000000L) {
-                            v.held = false;
-                            v.releaseNs = now;
-                        }
-                        for (int k=0;k<frames;k++) {
-                            int idx = (int)v.pos;
-                            if (idx >= s.data.length-2) { remove=true; break; }
-                            float frac = (float)(v.pos - idx);
-                            float sample = s.data[idx] + (s.data[idx+1]-s.data[idx])*frac;
-                            float rel = 1f;
-                            if (!v.held && v.releaseNs > 0) {
-                                double r = (now - v.releaseNs) / 1e9;
-                                rel = (float)Math.exp(-r * 7.5);
-                                if (rel < .002f) { remove=true; break; }
-                            }
-                            float z = sample * v.amp * volume * rel * 0.55f;
-                            int q = k*2;
-                            int l = out[q] + (int)(z*32767f);
-                            int r = out[q+1] + (int)(z*32767f);
-                            out[q] = (short)Math.max(-32767,Math.min(32767,l));
-                            out[q+1] = (short)Math.max(-32767,Math.min(32767,r));
-                            v.pos += ratio;
-                        }
-                        if (remove) it.remove();
-                    }
-                }
+        void startAudio() {}
 
-                if (metronome && now >= nextClickNs) {
-                    nextClickNs = now + 60000000000L / Math.max(30,bpm);
-                    clickUntilNs = now + 30000000L;
-                    clickPhase = 0;
-                }
-                if (now < clickUntilNs) {
-                    for (int k=0;k<frames;k++) {
-                        double t = k / (double)RATE;
-                        double env = Math.exp(-t*90.0);
-                        float z = (float)(Math.sin(2*Math.PI*1800*t)*env*.12);
-                        int q=k*2;
-                        out[q]=(short)Math.max(-32767,Math.min(32767,out[q]+(int)(z*32767)));
-                        out[q+1]=out[q];
-                    }
-                }
+        void playSample(int note,float vel) {
+            if(!soundReady || soundPool==null || note<MIN_NOTE || note>MAX_NOTE) return;
+            int anchor=sampleForNote[note], sid=soundIds[anchor];
+            if(sid==0) return;
+            float rate=(float)Math.pow(2.0,(note-anchor)/12.0);
+            rate=Math.max(.5f,Math.min(2f,rate));
+            Integer old=streams.get(note);
+            if(old!=null) soundPool.stop(old);
+            int stream=soundPool.play(sid,Math.min(1f,vel)*volume,Math.min(1f,vel)*volume,1,0,rate);
+            if(stream!=0) streams.put(note,stream);
+            Runnable stopper=() -> {
+                Integer st=streams.remove(note);
+                if(st!=null && soundPool!=null) soundPool.stop(st);
+            };
+            Runnable previous=autoStops.put(note,stopper);
+            if(previous!=null) audioHandler.removeCallbacks(previous);
+            audioHandler.postDelayed(stopper,1850);
+        }
 
-                try { audio.write(out,0,out.length,AudioTrack.WRITE_BLOCKING); }
-                catch (Exception e) { break; }
-            }
+        void stopSample(int note) {
+            Runnable r=autoStops.remove(note);
+            if(r!=null) audioHandler.removeCallbacks(r);
+            Integer st=streams.remove(note);
+            if(st!=null && soundPool!=null) soundPool.stop(st);
         }
 
         void startMidi() {
