@@ -4,6 +4,10 @@ on:
     paths:
       - 'piano/**'
       - '.github/workflows/build-piano.yml'
+  pull_request:
+    paths:
+      - 'piano/**'
+      - '.github/workflows/build-piano.yml'
   workflow_dispatch:
 permissions:
   contents: read
