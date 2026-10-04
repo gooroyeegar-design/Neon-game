@@ -150,6 +150,42 @@ public class MainActivity extends Activity {
             if(st!=null && soundPool!=null) soundPool.stop(st);
         }
 
+        class Voice {
+            int note;
+            float amp;
+            final long bornNs=System.nanoTime();
+            boolean held=true;
+            long releaseNs=0;
+            Voice(int n,float a){note=n;amp=a;}
+        }
+
+        class Event {
+            long t;
+            int type,note;
+            float vel;
+            Event(long tt,int ty,int n,float v){t=tt;type=ty;note=n;vel=v;}
+        }
+
+        int whiteIndex(int midi) {
+            int[] pcs={0,2,4,5,7,9,11};
+            int octave=midi/12, pc=midi%12;
+            for(int i=0;i<7;i++) if(pcs[i]==pc) return octave*7+i;
+            return -1;
+        }
+        int noteAtWhite(int wi) {
+            int[] pcs={0,2,4,5,7,9,11};
+            return (wi/7)*12+pcs[wi%7];
+        }
+        int visibleCount(){return visibleWhites[Math.max(0,Math.min(visibleWhites.length-1,zoomStep))];}
+        float keyWidth(){return getWidth()/(float)visibleCount();}
+        float keyboardTop(){return 82f;}
+        float keyboardBottom(){return getHeight()-8f;}
+        void clampScroll(){
+            float max=MAX_WHITE-MIN_WHITE+1-visibleCount();
+            if(max<0) max=0;
+            scroll=Math.max(MIN_WHITE,Math.min(MIN_WHITE+max,scroll));
+        }
+
         void startMidi() {
             try {
                 midiManager = (MidiManager)getSystemService(MIDI_SERVICE);
