@@ -417,7 +417,9 @@ public class MainActivity extends Activity {
                     p.setTextAlign(Paint.Align.CENTER);
                     p.setTextSize(Math.max(8,Math.min(12,kw*.18f)));
                     p.setColor(active?Color.rgb(25,42,80):Color.rgb(68,68,72));
-                    c.drawText(noteName(n),x+kw/2,bottom-14,p);
+                    c.drawText(letterName(n),x+kw/2,bottom-30,p);
+                    p.setTextSize(Math.max(8,Math.min(11,kw*.16f)));
+                    c.drawText(solfegeName(n),x+kw/2,bottom-14,p);
                 }
             }
 
@@ -463,10 +465,16 @@ public class MainActivity extends Activity {
             }
         }
 
-        String noteName(int n) {
+        String letterName(int n) {
             String[] a={"C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"};
-            return a[(n%12+12)%12]+(n/12-1);
+            return a[(n%12+12)%12];
         }
+        String solfegeName(int n) {
+            String[] a={"Do","Do♯","Re","Re♯","Mi","Fa","Fa♯","Sol","Sol♯","La","La♯","Si"};
+            return a[(n%12+12)%12];
+        }
+        String noteName(int n) { return letterName(n)+(n/12-1); }
+        String dualLabel(int n) { return letterName(n)+" / "+solfegeName(n); }
 
         @Override public boolean onTouchEvent(MotionEvent e) {
             int action=e.getActionMasked();
@@ -475,7 +483,7 @@ public class MainActivity extends Activity {
 
             if(action==MotionEvent.ACTION_DOWN) {
                 float x=e.getX(), y=e.getY();
-                if(y<92) { toolbarAction(x); return true; }
+                if(y<82) { toolbarAction(x); return true; }
                 panning=false;
                 int n=hit(x,y);
                 if(n>0) {
