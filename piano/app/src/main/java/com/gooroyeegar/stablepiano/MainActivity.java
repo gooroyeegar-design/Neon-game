@@ -8,6 +8,7 @@ import android.graphics.drawable.*;
 import android.media.*;
 import android.media.midi.*;
 import android.view.*;
+import android.widget.Toast;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
