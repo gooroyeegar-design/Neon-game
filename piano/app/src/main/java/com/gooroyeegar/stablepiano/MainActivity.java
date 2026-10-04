@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
         final HashMap<Integer,Integer> fingers = new HashMap<>();
         final ArrayList<Event> take = new ArrayList<>();
 
-        final int[] SAMPLE_NOTES = {21,24,36,48,60,72,84,96,108};
+        final int[] SAMPLE_NOTES = {21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69,72,75,78,81,84,87,90,93,96,99,102,105,108};
         final HashMap<Integer,Sample> samples = new HashMap<>();
 
         final String[] instruments = {
@@ -103,9 +103,10 @@ public class MainActivity extends Activity {
             int note;
             float amp;
             double pos;
+            final long bornNs;
             boolean held = true;
             long releaseNs = 0;
-            Voice(int n, float a) { note=n; amp=a; }
+            Voice(int n, float a) { note=n; amp=a; bornNs=System.nanoTime(); }
         }
 
         class Event {
@@ -232,6 +233,11 @@ public class MainActivity extends Activity {
                         if (s == null || s.data.length < 2) { it.remove(); continue; }
                         double ratio = Math.pow(2.0, (v.note - s.midi) / 12.0);
                         boolean remove = false;
+                        // Hard damper: a long touch cannot ring forever.
+                        if (v.held && now - v.bornNs >= 1850000000L) {
+                            v.held = false;
+                            v.releaseNs = now;
+                        }
                         for (int k=0;k<frames;k++) {
                             int idx = (int)v.pos;
                             if (idx >= s.data.length-2) { remove=true; break; }
@@ -240,7 +246,7 @@ public class MainActivity extends Activity {
                             float rel = 1f;
                             if (!v.held && v.releaseNs > 0) {
                                 double r = (now - v.releaseNs) / 1e9;
-                                rel = (float)Math.exp(-r * 13.0);
+                                rel = (float)Math.exp(-r * 7.5);
                                 if (rel < .002f) { remove=true; break; }
                             }
                             float z = sample * v.amp * volume * rel * 0.55f;
@@ -402,7 +408,7 @@ public class MainActivity extends Activity {
         }
 
         void toolbarAction(float x) {
-            float left=10, w=70, gap=6;
+            float left=150, w=46, gap=4;
             if (x<left) return;
             int i=(int)((x-left)/(w+gap));
             if (i<0 || i>10) return;
@@ -445,7 +451,7 @@ public class MainActivity extends Activity {
             c.drawText(modes[mode]+"  •  "+scales[scale]+"  •  "+bpm+" BPM",14,64,p);
 
             String[] labels={"SOUND","MODE","SCALE","METRO","REC","PLAY","−","＋","◀","▶","SET"};
-            float bw=70, gap=6, x=10;
+            float bw=46, gap=4, x=150;
             for(int i=0;i<labels.length;i++) {
                 if (i==0) drawButton(c,x,10,bw,labels[i],false);
                 else if (i==1) drawButton(c,x,10,bw,labels[i],false);
@@ -492,11 +498,20 @@ public class MainActivity extends Activity {
                 if(x>getWidth() || x+kw<0) continue;
                 boolean active=pressed(n);
                 boolean target=mode==4 && n==learnNote;
-                p.setColor(active?Color.rgb(210,224,255):target?Color.rgb(248,225,151):Color.rgb(250,249,246));
-                c.drawRect(x+1,top,x+kw-1,bottom,p);
-                stroke.setColor(Color.rgb(95,96,100));
-                stroke.setStrokeWidth(1f);
-                c.drawRect(x+1,top,x+kw-1,bottom,stroke);
+                // Physical white-key depth: shadow, gradient face and lower lip.
+                p.setShader(null);
+                p.setColor(Color.argb(70,0,0,0));
+                c.drawRoundRect(x+1,top+3,x+kw-1,bottom+2,3,3,p);
+                int topColor = active ? Color.rgb(225,235,255) : target ? Color.rgb(255,235,166) : Color.rgb(255,255,252);
+                int bottomColor = active ? Color.rgb(168,190,238) : target ? Color.rgb(225,194,111) : Color.rgb(218,218,214);
+                p.setShader(new LinearGradient(0,top,0,bottom,topColor,bottomColor,Shader.TileMode.CLAMP));
+                c.drawRoundRect(x+1,top,x+kw-1,bottom,3,3,p);
+                p.setShader(null);
+                p.setColor(active?Color.rgb(125,149,201):Color.rgb(177,178,180));
+                c.drawRect(x+2,bottom-5,x+kw-2,bottom-2,p);
+                stroke.setColor(Color.rgb(72,74,78));
+                stroke.setStrokeWidth(1.5f);
+                c.drawRoundRect(x+1,top,x+kw-1,bottom,3,3,stroke);
                 if(labels && kw>=34) {
                     p.setTextAlign(Paint.Align.CENTER);
                     p.setTextSize(Math.max(8,Math.min(12,kw*.18f)));
@@ -516,12 +531,21 @@ public class MainActivity extends Activity {
                 float bw=kw*.62f;
                 if(center+bw/2<0 || center-bw/2>getWidth()) continue;
                 boolean active=pressed(black);
-                p.setColor(active?Color.rgb(75,92,145):Color.rgb(27,28,31));
-                c.drawRoundRect(center-bw/2,top,center+bw/2,top+blackH,4,4,p);
+                // Raised black-key cap with deep shadow and a small bevel highlight.
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(Color.argb(105,0,0,0));
+                c.drawRoundRect(center-bw/2+2,top+4,center+bw/2+2,top+blackH+3,5,5,p);
+                int blackTop=active?Color.rgb(91,111,169):Color.rgb(58,59,64);
+                int blackBottom=active?Color.rgb(49,65,105):Color.rgb(12,13,15);
+                p.setShader(new LinearGradient(0,top,0,top+blackH,blackTop,blackBottom,Shader.TileMode.CLAMP));
+                c.drawRoundRect(center-bw/2,top,center+bw/2,top+blackH,5,5,p);
+                p.setShader(null);
+                p.setColor(active?Color.rgb(150,169,215):Color.rgb(104,105,110));
+                c.drawRoundRect(center-bw/2+3,top+2,center+bw/2-3,top+5,2,2,p);
                 p.setStyle(Paint.Style.STROKE);
-                p.setStrokeWidth(1.5f);
-                p.setColor(Color.rgb(5,5,6));
-                c.drawRoundRect(center-bw/2,top,center+bw/2,top+blackH,4,4,p);
+                p.setStrokeWidth(1.7f);
+                p.setColor(Color.rgb(4,4,5));
+                c.drawRoundRect(center-bw/2,top,center+bw/2,top+blackH,5,5,p);
                 p.setStyle(Paint.Style.FILL);
             }
 
@@ -555,7 +579,13 @@ public class MainActivity extends Activity {
                 int n=hit(x,y);
                 if(n>0) {
                     fingers.put(id,n);
-                    float vel=velocity ? Math.max(.22f,Math.min(1f,1f-((y-keyboardTop())/(keyboardBottom()-keyboardTop()))*.72f)) : .82f;
+                    float pressure = e.getPressure(idx);
+                    float vel = velocity
+                        ? Math.max(.18f, Math.min(1f,
+                            pressure > 0.01f
+                                ? (.38f + pressure*.62f)
+                                : (1f-((y-keyboardTop())/(keyboardBottom()-keyboardTop()))*.72f)))
+                        : .82f;
                     noteOn(n,vel);
                 }
                 return true;
@@ -567,7 +597,10 @@ public class MainActivity extends Activity {
                 int n=hit(x,y);
                 if(n>0) {
                     fingers.put(id,n);
-                    noteOn(n,velocity?.8f:.82f);
+                    float pressure=e.getPressure(idx);
+                    noteOn(n, velocity
+                        ? Math.max(.25f,Math.min(1f,pressure>0.01f?.42f+pressure*.58f:.8f))
+                        : .82f);
                 }
                 return true;
             }
@@ -590,7 +623,6 @@ public class MainActivity extends Activity {
             if(action==MotionEvent.ACTION_UP || action==MotionEvent.ACTION_POINTER_UP || action==MotionEvent.ACTION_CANCEL) {
                 Integer n=fingers.remove(id);
                 if(n!=null) noteOff(n);
-                if(action==MotionEvent.ACTION_UP) releaseAllIfNeeded();
                 return true;
             }
             return true;
@@ -626,6 +658,7 @@ public class MainActivity extends Activity {
             boolean[] checked={velocity,sustain,labels};
             new AlertDialog.Builder(MainActivity.this)
                 .setTitle("Piano settings")
+                .setMessage("Grand Piano sound: Salamander Grand Piano V3 by Alexander Holm — real Yamaha C5 recordings, CC BY 3.0.")
                 .setMultiChoiceItems(items,checked,(d,w,on)->{
                     if(w==0) velocity=on;
                     if(w==1) {sustain=on;if(!on)releaseAll();}
