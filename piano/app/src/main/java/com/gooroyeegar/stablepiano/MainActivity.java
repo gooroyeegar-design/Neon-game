@@ -77,6 +77,10 @@ public class MainActivity extends Activity {
         int zoomStep = 2;
         float volume = .88f;
         boolean sustain = false, recording = false, playing = false, metronome = false;
+        volatile boolean alive = true;
+        MidiManager midiManager;
+        MidiDevice midiDevice;
+        MidiReceiver midiReceiver;
         boolean labels = true, velocity = true;
         long recStart;
         int learnNote = 60;
