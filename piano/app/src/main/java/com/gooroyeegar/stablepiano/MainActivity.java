@@ -14,7 +14,7 @@ public class MainActivity extends Activity {
         setContentView(new PianoView());
     }
 
-    private static final class PianoView extends View {
+    private final class PianoView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private int active = -1;
 
