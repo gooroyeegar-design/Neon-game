@@ -13,6 +13,7 @@ import java.io.*;
 import java.util.*;
 import android.content.res.AssetManager;
 
+// Final performance/UI build verification
 public class MainActivity extends Activity {
     PianoView piano;
 
